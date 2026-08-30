@@ -11,6 +11,7 @@ import 'package:PiliPlus/common/widgets/image_grid/image_grid_view.dart'
     show ImageGridView, ImageModel;
 import 'package:PiliPlus/common/widgets/pendant_avatar.dart';
 import 'package:PiliPlus/grpc/reply.dart';
+import 'package:PiliPlus/http/bangumi.dart';
 import 'package:PiliPlus/http/fav.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/audio_normalization.dart';
@@ -443,6 +444,22 @@ List<SettingsModel> get extraSettings => [
     setKey: SettingBoxKey.showPgcTimeline,
     defaultVal: true,
     needReboot: true,
+  ),
+  const SwitchModel(
+    title: '番剧/影视启用Bangumi源数据',
+    subtitle: '关闭后恢复原有番剧/影视页面（重启生效）',
+    leading: Icon(Icons.swap_horiz),
+    setKey: SettingBoxKey.bangumiSourceData,
+    defaultVal: true,
+    needReboot: true,
+  ),
+  SwitchModel(
+    title: '隐藏无评分条目',
+    subtitle: 'bgm.tv 浏览页（番剧/影视）不显示无评分条目',
+    leading: const Icon(Icons.visibility_off_outlined),
+    setKey: SettingBoxKey.hideNoScoreMedia,
+    defaultVal: true,
+    onChanged: (value) => BangumiHttp.clearAllBrowseCache(),
   ),
   SwitchModel(
     title: '静默下载图片',

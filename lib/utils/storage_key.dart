@@ -131,6 +131,8 @@ abstract final class SettingBoxKey {
       fastForBackwardDuration = 'fastForBackwardDuration',
       recordSearchHistory = 'recordSearchHistory',
       showPgcTimeline = 'showPgcTimeline',
+      hideNoScoreMedia = 'hideNoScoreMedia',
+      bangumiSourceData = 'bangumiSourceData',
       pageTransition = 'pageTransition',
       optTabletNav = 'optTabletNav',
       banWordForDyn = 'banWordForDyn',

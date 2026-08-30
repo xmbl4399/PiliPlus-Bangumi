@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
+import 'package:PiliPlus/utils/extension/string_ext.dart';
 import 'package:PiliPlus/utils/image_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:cached_network_image_ce/cached_network_image.dart';
@@ -22,6 +23,7 @@ class NetworkImgLayer extends StatelessWidget {
     this.fit = .cover,
     this.alignment = .center,
     this.cacheWidth,
+    this.skipThumbnail = false,
   });
 
   final String? src;
@@ -36,6 +38,9 @@ class NetworkImgLayer extends StatelessWidget {
   final BoxFit fit;
   final Alignment alignment;
   final bool? cacheWidth;
+
+  /// 非 B 站图源（如 bgm.tv 封面）需跳过 @1q.webp 后缀处理（二改新增）
+  final bool skipThumbnail;
 
   static Color? reduceLuxColor = Pref.reduceLuxColor;
   static bool reduce = false;
@@ -71,7 +76,9 @@ class NetworkImgLayer extends StatelessWidget {
       memCacheHeight = height.cacheSize(context);
     }
     return CachedNetworkImage(
-      imageUrl: ImageUtils.thumbnailUrl(src, quality),
+      imageUrl: skipThumbnail
+          ? src.http2https
+          : ImageUtils.thumbnailUrl(src, quality),
       width: width,
       height: height,
       memCacheWidth: memCacheWidth,

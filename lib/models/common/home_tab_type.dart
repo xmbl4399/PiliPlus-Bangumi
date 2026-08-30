@@ -1,4 +1,6 @@
 import 'package:PiliPlus/models/common/enum_with_label.dart';
+import 'package:PiliPlus/pages/bangumi_browse/bangumi_browse_controller.dart';
+import 'package:PiliPlus/pages/bangumi_browse/bangumi_browse_page.dart';
 import 'package:PiliPlus/pages/common/common_controller.dart';
 import 'package:PiliPlus/pages/hot/controller.dart';
 import 'package:PiliPlus/pages/hot/view.dart';
@@ -10,6 +12,7 @@ import 'package:PiliPlus/pages/rank/controller.dart';
 import 'package:PiliPlus/pages/rank/view.dart';
 import 'package:PiliPlus/pages/rcmd/controller.dart';
 import 'package:PiliPlus/pages/rcmd/view.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -32,7 +35,9 @@ enum HomeTabType implements EnumWithLabel {
     HomeTabType.hot => Get.find<HotController>,
     HomeTabType.rank => Get.find<RankController>,
     HomeTabType.bangumi ||
-    HomeTabType.cinema => () => Get.find<PgcController>(tag: name),
+    HomeTabType.cinema => Pref.bangumiSourceData
+        ? () => Get.find<BangumiSectionController>(tag: name)
+        : () => Get.find<PgcController>(tag: name),
   };
 
   Widget get page => switch (this) {
@@ -40,7 +45,11 @@ enum HomeTabType implements EnumWithLabel {
     HomeTabType.rcmd => const RcmdPage(),
     HomeTabType.hot => const HotPage(),
     HomeTabType.rank => const RankPage(),
-    HomeTabType.bangumi => const PgcPage(tabType: HomeTabType.bangumi),
-    HomeTabType.cinema => const PgcPage(tabType: HomeTabType.cinema),
+    HomeTabType.bangumi => Pref.bangumiSourceData
+        ? const BangumiSectionPage(tag: 'bangumi')
+        : const PgcPage(tabType: HomeTabType.bangumi),
+    HomeTabType.cinema => Pref.bangumiSourceData
+        ? const BangumiSectionPage(tag: 'cinema')
+        : const PgcPage(tabType: HomeTabType.cinema),
   };
 }

@@ -1,0 +1,2 @@
+# 二改：patch 文件强制 LF，防止 Windows autocrlf 检出后 git apply 失败
+*.patch text eol=lf

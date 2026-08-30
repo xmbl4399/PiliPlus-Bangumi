@@ -19,6 +19,8 @@ if (!isBuiltInKotlinEnabled) {
 
 android {
     namespace = "com.example.piliplus"
+    // 二改：compileSdk 37（permission_handler 硬性要求）；
+    // SDK 平台目录 android-37.0 已通过 junction android-37 兜底解析
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 

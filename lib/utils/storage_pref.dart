@@ -619,6 +619,14 @@ abstract final class Pref {
   static bool get showPgcTimeline =>
       _setting.get(SettingBoxKey.showPgcTimeline, defaultValue: true);
 
+  /// 隐藏无评分条目（bgm 浏览页），默认开启
+  static bool get hideNoScoreMedia =>
+      _setting.get(SettingBoxKey.hideNoScoreMedia, defaultValue: true);
+
+  /// 番剧/影视启用 Bangumi 源数据（关闭回退原版页面），默认开启
+  static bool get bangumiSourceData =>
+      _setting.get(SettingBoxKey.bangumiSourceData, defaultValue: true);
+
   static num get maxCacheSize =>
       _setting.get(SettingBoxKey.maxCacheSize) ?? 1 << 30;
 
