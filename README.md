@@ -25,6 +25,23 @@
 
 <br/>
 
+## PiliPlus-Bangumi 二改
+
+番剧/影视页面接入 [bgm.tv](https://bgm.tv) 开放数据，按年份浏览、评分排序：
+
+- 「番剧」：TV / WEB / OVA / 剧场版
+- 「影视」：日剧 / 欧美剧 / 华语剧 / 韩剧 / 电影
+- 点击条目直达 B 站搜索，长按复制标题；下拉刷新首月停圈、其余月份流式追加
+- 设置中可「隐藏无评分条目」（默认开），或关闭「Bangumi 源数据」回退原版页面
+
+<img src="assets/screenshots/bangumi_anime.png" width="32%" alt="番剧" />
+<img src="assets/screenshots/bangumi_cinema.png" width="32%" alt="影视" />
+<img src="assets/screenshots/bangumi_prefs.png" width="32%" alt="设置" />
+<br/>
+
+
+<br/>
+
 ## 适配平台
 
 - [x] Android
