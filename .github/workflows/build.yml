@@ -108,10 +108,16 @@ jobs:
                   flutter build apk --release --split-per-abi --android-project-arg dev=1 --no-pub
 
             - name: Rename
+              # 二改：workflow_dispatch 发版时 APK 文件名直接用 tag（如 2.1.3.1.1），
+              # PR 构建回退到 pubspec 派生的 env.version
               run: |
                   for file in build/app/outputs/flutter-apk/app-*-release.apk; do
                     abi=$(echo "$file" | sed -E 's|.*app-(.*)-release\.apk|\1|')
-                    mv "$file" "PiliPlus_android_${{ env.version }}_${abi}.apk"
+                    if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
+                      mv "$file" "PiliPlus_android_${{ github.event.inputs.tag }}_${abi}.apk"
+                    else
+                      mv "$file" "PiliPlus_android_${{ env.version }}_${abi}.apk"
+                    fi
                   done
               shell: bash
 

@@ -469,18 +469,45 @@ List<SettingsModel> get extraSettings => [
     },
     onTap: (context, setState) {
       String valueStr = Pref.bangumiApiBaseUrl;
+      final controller = TextEditingController(text: valueStr);
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Bangumi API 地址'),
-          content: TextField(
-            autofocus: true,
-            controller: TextEditingController(text: valueStr),
-            onChanged: (value) => valueStr = value,
-            keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              hintText: 'https://api.bgm.tv（留空=官方）',
-            ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                autofocus: true,
+                controller: controller,
+                onChanged: (value) => valueStr = value,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  hintText: 'https://api.bgm.tv（留空=官方）',
+                ),
+              ),
+              const SizedBox(height: 10),
+              // 快捷预设：官方 / 社区镜像（bgm 官方论坛推荐的镜像，遇 DNS 污染备用）
+              Row(
+                children: [
+                  ActionChip(
+                    label: const Text('官方'),
+                    onPressed: () {
+                      valueStr = '';
+                      controller.text = '';
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  ActionChip(
+                    label: const Text('镜像 api.bangumi.lol'),
+                    onPressed: () {
+                      valueStr = 'https://api.bangumi.lol';
+                      controller.text = valueStr;
+                    },
+                  ),
+                ],
+              ),
+            ],
           ),
           actions: [
             TextButton(

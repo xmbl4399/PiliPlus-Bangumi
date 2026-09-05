@@ -16,15 +16,23 @@ import 'package:path/path.dart' as path;
 ///   当年 12h / 历史年份 30d；存过滤后的原始 JSON
 abstract final class BangumiHttp {
   static const _officialBaseUrl = 'https://api.bgm.tv';
+
+  /// 社区镜像（非官方，遇 DNS 污染/被墙时自动备用，见 bgm.tv 官方论坛镜像帖）
+  static const _mirrorBaseUrl = 'https://api.bangumi.lol';
+
   static const _cacheVersion = 'v6';
   static const _userAgent =
       'PiliPlus/2.1 (https://github.com/bggRGjQaUbCoE/PiliPlus; bangumi)';
 
-  /// 当前生效的 API 基地址：设置里的反代/镜像优先，留空用官方
-  /// （移动网络对 .tv 域名 DNS 污染时可自建反代解决，见设置项说明）
-  static String get baseUrl {
+  /// 候选基地址（按顺序尝试）：设置里的自建反代/镜像优先，其次官方，最后社区镜像
+  static List<String> get _candidates {
     final custom = Pref.bangumiApiBaseUrl.trim();
-    return custom.isNotEmpty ? custom : _officialBaseUrl;
+    final list = <String>[
+      if (custom.isNotEmpty) custom,
+      _officialBaseUrl,
+      _mirrorBaseUrl,
+    ];
+    return list.toSet().toList();
   }
 
   static Dio? _dio;
@@ -126,7 +134,7 @@ abstract final class BangumiHttp {
     }
   }
 
-  /// 拉全某年某月条目（缓存优先）
+  /// 拉全某年某月条目（缓存优先；网络失败自动切换候选基地址）
   static Future<List<BangumiBrowseItem>> fetchYearMonth({
     required BangumiBrowseMode mode,
     required int year,
@@ -139,20 +147,54 @@ abstract final class BangumiHttp {
       return _parse(cached);
     }
 
+    Object? lastError;
+    for (final base in _candidates) {
+      try {
+        final rawList = await _fetchAllPages(
+          base: base,
+          mode: mode,
+          year: year,
+          month: month,
+        );
+        _writeCache(file, rawList);
+        return _parse(rawList);
+      } on DioException catch (e) {
+        // 仅网络类错误触发备用地址切换；业务/解析错误直接抛出
+        final isNetwork =
+            e.type == DioExceptionType.connectionError ||
+            e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout ||
+            e.type == DioExceptionType.unknown;
+        if (!isNetwork) rethrow;
+        lastError = e;
+      }
+    }
+    throw lastError ?? Exception('Bangumi 网络请求失败');
+  }
+
+  /// 用指定基地址分页拉全一个月（limit=100，offset 翻页，安全上限 500）
+  static Future<List<dynamic>> _fetchAllPages({
+    required String base,
+    required BangumiBrowseMode mode,
+    required int year,
+    required int month,
+  }) async {
     final rawList = <dynamic>[];
     final seenIds = <int>{};
-    final base = baseUrl;
     var offset = 0;
     while (true) {
       final res = await _client.getUri<dynamic>(
         Uri.parse('$base/v0/subjects').replace(
           queryParameters: {
-            'type': mode.type,
-            'cat': mode.cat,
-            'year': year,
-            'month': month,
-            'limit': 100,
-            'offset': offset,
+            // 注意：Uri.replace 的 queryParameters 值必须是 String/Iterable，
+            // Dart 3.13 传 int 会抛 "int is not a subtype of Iterable"
+            'type': '${mode.type}',
+            'cat': '${mode.cat}',
+            'year': '$year',
+            'month': '$month',
+            'limit': '100',
+            'offset': '$offset',
           },
         ),
       );
@@ -175,9 +217,7 @@ abstract final class BangumiHttp {
       offset += 100;
       if (offset > 500) break; // 安全上限
     }
-
-    _writeCache(file, rawList);
-    return _parse(rawList);
+    return rawList;
   }
 
   static List<BangumiBrowseItem> _parse(List<dynamic> rawList) {
