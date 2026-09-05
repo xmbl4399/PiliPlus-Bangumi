@@ -625,6 +625,10 @@ abstract final class Pref {
   static bool get bangumiSourceData =>
       _setting.get(SettingBoxKey.bangumiSourceData, defaultValue: true);
 
+  /// Bangumi API 基地址（移动网络 DNS 污染时可换自建反代/镜像，留空=官方）
+  static String get bangumiApiBaseUrl =>
+      _setting.get(SettingBoxKey.bangumiApiBaseUrl, defaultValue: '');
+
   static num get maxCacheSize =>
       _setting.get(SettingBoxKey.maxCacheSize) ?? 1 << 30;
 

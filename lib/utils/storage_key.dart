@@ -133,6 +133,7 @@ abstract final class SettingBoxKey {
       showPgcTimeline = 'showPgcTimeline',
       hideNoScoreMedia = 'hideNoScoreMedia',
       bangumiSourceData = 'bangumiSourceData',
+      bangumiApiBaseUrl = 'bangumiApiBaseUrl',
       pageTransition = 'pageTransition',
       optTabletNav = 'optTabletNav',
       banWordForDyn = 'banWordForDyn',

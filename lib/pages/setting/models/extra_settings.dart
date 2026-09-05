@@ -460,6 +460,54 @@ List<SettingsModel> get extraSettings => [
     defaultVal: true,
     onChanged: (value) => BangumiHttp.clearAllBrowseCache(),
   ),
+  NormalModel(
+    title: 'Bangumi API 地址',
+    leading: const Icon(Icons.dns_outlined),
+    getSubtitle: () {
+      final v = Pref.bangumiApiBaseUrl.trim();
+      return v.isEmpty ? 'api.bgm.tv（官方）' : v;
+    },
+    onTap: (context, setState) {
+      String valueStr = Pref.bangumiApiBaseUrl;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Bangumi API 地址'),
+          content: TextField(
+            autofocus: true,
+            controller: TextEditingController(text: valueStr),
+            onChanged: (value) => valueStr = value,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              hintText: 'https://api.bgm.tv（留空=官方）',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: Get.back,
+              child: Text(
+                '取消',
+                style: TextStyle(color: ColorScheme.of(context).outline),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                GStorage.setting.put(
+                  SettingBoxKey.bangumiApiBaseUrl,
+                  valueStr.trim(),
+                );
+                Get.back();
+                setState();
+                // 基地址变更后旧缓存指向旧域名，一并清除
+                BangumiHttp.clearAllBrowseCache();
+              },
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      );
+    },
+  ),
   SwitchModel(
     title: '静默下载图片',
     subtitle: '不显示下载 Loading 弹窗',

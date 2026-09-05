@@ -15,17 +15,23 @@ import 'package:path/path.dart' as path;
 /// - 文件缓存（§2.5）：browse_{type}_{cat}_{year}_{month}_v5.json，
 ///   当年 12h / 历史年份 30d；存过滤后的原始 JSON
 abstract final class BangumiHttp {
-  static const _baseUrl = 'https://api.bgm.tv';
+  static const _officialBaseUrl = 'https://api.bgm.tv';
   static const _cacheVersion = 'v6';
   static const _userAgent =
       'PiliPlus/2.1 (https://github.com/bggRGjQaUbCoE/PiliPlus; bangumi)';
+
+  /// 当前生效的 API 基地址：设置里的反代/镜像优先，留空用官方
+  /// （移动网络对 .tv 域名 DNS 污染时可自建反代解决，见设置项说明）
+  static String get baseUrl {
+    final custom = Pref.bangumiApiBaseUrl.trim();
+    return custom.isNotEmpty ? custom : _officialBaseUrl;
+  }
 
   static Dio? _dio;
 
   static Dio get _client =>
       _dio ??= Dio(
           BaseOptions(
-            baseUrl: _baseUrl,
             connectTimeout: const Duration(seconds: 12),
             receiveTimeout: const Duration(seconds: 60),
             headers: {'user-agent': _userAgent},
@@ -135,18 +141,20 @@ abstract final class BangumiHttp {
 
     final rawList = <dynamic>[];
     final seenIds = <int>{};
+    final base = baseUrl;
     var offset = 0;
     while (true) {
-      final res = await _client.get<dynamic>(
-        '/v0/subjects',
-        queryParameters: {
-          'type': mode.type,
-          'cat': mode.cat,
-          'year': year,
-          'month': month,
-          'limit': 100,
-          'offset': offset,
-        },
+      final res = await _client.getUri<dynamic>(
+        Uri.parse('$base/v0/subjects').replace(
+          queryParameters: {
+            'type': mode.type,
+            'cat': mode.cat,
+            'year': year,
+            'month': month,
+            'limit': 100,
+            'offset': offset,
+          },
+        ),
       );
       final data = res.data is Map ? res.data['data'] : null;
       if (data is! List) break;
