@@ -1,55 +1,71 @@
 import 'package:PiliPlus/http/bangumi.dart';
 
-/// tag 白名单（动画向 47 词，来自 Bangumi_Integration_Guide §3）
-const List<String> kBangumiTagWhitelist = [
-  '奇幻',
-  '冒险',
-  '战斗',
-  '校园',
-  '日常',
-  '科幻',
-  '恋爱',
-  '喜剧',
-  '热血',
-  '悬疑',
-  '推理',
-  '机战',
-  '运动',
-  '音乐',
-  '美食',
-  '治愈',
-  '恐怖',
-  '历史',
-  '偶像',
-  '百合',
-  '耽美',
-  '竞技',
-  '动作',
-  '剧情',
-  '搞笑',
-  '催泪',
-  '致郁',
-  '魔法',
-  '机甲',
-  '战争',
-  '体育',
-  '侦探',
-  '后宫',
-  '穿越',
-  '异世界',
-  '职场',
-  '青春',
-  '家庭',
-  '童话',
-  '歌舞',
-  '泡面番',
-  '群像',
-  '智斗',
-  '犯罪',
-  '末世',
-  '科幻悬疑',
-  '恋爱喜剧',
-];
+/// # tag 双层词表（Tier1 题材 / Tier2 来源·受众）
+///
+/// 依据可移植设计文档《二级白名单设计方案》（bili-bgm-overlay 项目
+/// `docs/tier-whitelist-design.md`，未随本仓库分发）：
+/// bgm.tv 列表接口的 tag 是一个**受控小词表**（四年 937 条去重后仅 53 词），
+/// 所以不是"从无限词汇里挑"，而是从这个表里做取舍。
+///
+/// 旧版是凭直觉写的 47 词单层白名单，问题有两个：
+/// 1. 词表里 32 个词属"零边际贡献"（从不单独决定某条有没有 tag），占着位置；
+/// 2. 单层无法表达"题材优先、来源/受众补位"，卡片槽位利用率低。
+///
+/// 分层后层号即显示优先级：
+/// - **Tier1 题材** 首选显示；
+/// - **Tier2 来源·受众** 只在 Tier1 没词时兜底，或 Tier1 只有 1 个词时补满槽位。
+///
+/// 词表来源：列表接口 `meta_tags` + `tags` 字段实测词频（无需逐条拉详情）。
+///
+/// 覆盖率实测（2023–2026 各 4 个月，共 **1119** 条动画）：
+///
+/// | 口径 | 覆盖率 |
+/// |---|---|
+/// | 旧 47 词单层 | 88.0% |
+/// | 仅 Tier1 | 83.7% |
+/// | **Tier1 + Tier2** | **90.9%** |
+/// | Tier1 + Tier2 + Tier3（平台/地区） | 99.6% |
+///
+/// 本实现**只做到 Tier1+Tier2 ≈ 90%**，不设 Tier3：补上 Tier3 虽然能到 99.6%，
+/// 但代价是卡片上会出现「TV／日本」这种零信息量的标签。剩下约 9% 拿不到词的条目，
+/// 其 tag 本身就只给了平台+地区（如 `TV/日本`、`TV/欧美`），属预期内空白。
+const Set<String> kBangumiTagTier1 = {
+  // Tier1 题材（27）
+  '奇幻', '战斗', '恋爱', '日常', '校园', '科幻', '喜剧', '玄幻', '冒险', '悬疑', '百合',
+  '穿越', '运动', '音乐', '历史', '剧情', '后宫', '武侠', '推理', '职场', '机战', '美食',
+  '萌系', 'BL', '恐怖', '惊悚', '耽美',
+};
+
+/// Tier2 来源 + 受众（12）——Tier1 无词时兜底，或补满槽位
+const Set<String> kBangumiTagTier2 = {
+  '漫画改', '原创', '小说改', '游戏改', '少年向', '青年向', '子供向', '女性向', '少女向',
+  '同人', '影视改', '乙女',
+};
+
+/// 双层分级挑词：题材永远排在前面，来源/受众用于补满槽位。
+///
+/// 注意**不要**写成"只取最高层命中的那一层"——那样 `[奇幻, 漫画改]` 只剩 1 个词，
+/// 白白浪费槽位；正确做法是两层拼接后截断。
+///
+/// ```dart
+/// pickBangumiTags(['TV', '日本', '小说改']) // => ['小说改']  Tier1 无词 → Tier2 兜底
+/// pickBangumiTags(['奇幻', '漫画改'])        // => ['奇幻', '漫画改']  题材在前 + 补满
+/// pickBangumiTags(['TV', '日本'])            // => []  无 Tier3，预期内空白
+/// ```
+List<String> pickBangumiTags(Iterable<String> names, {int max = 2}) {
+  final seen = <String>{};
+  final tier1 = <String>[];
+  final tier2 = <String>[];
+  for (final name in names) {
+    if (!seen.add(name)) continue; // 去重，保留首次出现顺序
+    if (kBangumiTagTier1.contains(name)) {
+      tier1.add(name);
+    } else if (kBangumiTagTier2.contains(name)) {
+      tier2.add(name);
+    }
+  }
+  return [...tier1, ...tier2].take(max).toList(growable: false);
+}
 
 /// bgm.tv /v0/subjects 浏览模式（Bangumi_Integration_Guide §2.2/§4）
 enum BangumiBrowseMode {
@@ -149,25 +165,26 @@ class BangumiBrowseItem {
     int? eps;
     if (json['eps'] is num) eps = (json['eps'] as num).toInt();
 
-    final tags = <String>[];
-    if (json['tags'] is List) {
-      for (final t in json['tags'] as List) {
-        if (t is Map) {
-          final name = t['name'];
-          if (name is String && kBangumiTagWhitelist.contains(name)) {
-            tags.add(name);
-            if (tags.length >= 2) break;
-          }
-        }
-      }
-    }
-
     final metaTags = <String>[];
     if (json['meta_tags'] is List) {
       for (final t in json['meta_tags'] as List) {
         if (t is String) metaTags.add(t);
       }
     }
+
+    // 双层挑词：候选 = meta_tags（平台人工摘要，受控词表，置前）
+    //            + tags（全量投票词，按票数降序，作补充）
+    // 两个字段都随列表接口一起返回，**无需额外请求详情**（P1-2）
+    final voted = <String>[];
+    if (json['tags'] is List) {
+      for (final t in json['tags'] as List) {
+        if (t is Map) {
+          final name = t['name'];
+          if (name is String) voted.add(name);
+        }
+      }
+    }
+    final tags = pickBangumiTags([...metaTags, ...voted]);
 
     return BangumiBrowseItem(
       id: (json['id'] as num?)?.toInt() ?? 0,
