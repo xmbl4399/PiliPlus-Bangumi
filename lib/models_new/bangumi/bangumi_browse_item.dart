@@ -2,33 +2,42 @@ import 'package:PiliPlus/http/bangumi.dart';
 
 /// # tag 双层词表（Tier1 题材 / Tier2 来源·受众）
 ///
-/// 依据可移植设计文档《二级白名单设计方案》（bili-bgm-overlay 项目
-/// `docs/tier-whitelist-design.md`，未随本仓库分发）：
-/// bgm.tv 列表接口的 tag 是一个**受控小词表**（四年 937 条去重后仅 53 词），
-/// 所以不是"从无限词汇里挑"，而是从这个表里做取舍。
+/// 依据两份可移植文档（bili-bgm-overlay 项目，未随本仓库分发）：
+/// - `docs/bangumi-v0-api-guide.md` —— v0 列表接口取 tag 的完整方案（**怎么用**）
+/// - `docs/tier-whitelist-design.md` —— 二级白名单设计（**词表怎么来的**）
 ///
-/// 旧版是凭直觉写的 47 词单层白名单，问题有两个：
-/// 1. 词表里 32 个词属"零边际贡献"（从不单独决定某条有没有 tag），占着位置；
-/// 2. 单层无法表达"题材优先、来源/受众补位"，卡片槽位利用率低。
+/// **前提事实**：`api.bgm.tv/v0/subjects` 的列表项**同时**返回
+/// `tags`（用户投票全量词，≤30，按票数降序）与 `meta_tags`（服务端结构化摘要）。
+/// 所以"列表没有内容词、必须逐条拉详情"只对 `next.bgm.tv/p1/subjects` 成立；
+/// **v0 通路上零额外请求就拿到全部 tag**，详情补拉是纯浪费
+/// （实测详情 `tags` 与列表 `tags` 逐字节一致，且一个空卡都救不了）。
+///
+/// bgm.tv 的 tag 是**受控小词表**（四年 937 条去重后仅 53 词），所以白名单是从这张
+/// 小表里做取舍 —— 但**不要凭直觉写词**：旧版就是凭直觉写的 47 词单层表单，
+/// 其中 32 个词属"零边际贡献"（从不单独决定某条有没有 tag），纯占位置。
 ///
 /// 分层后层号即显示优先级：
 /// - **Tier1 题材** 首选显示；
 /// - **Tier2 来源·受众** 只在 Tier1 没词时兜底，或 Tier1 只有 1 个词时补满槽位。
 ///
-/// 词表来源：列表接口 `meta_tags` + `tags` 字段实测词频（无需逐条拉详情）。
+/// 覆盖率实测（口径 `tags ∪ meta_tags`；2023–2026 共 **2091** 条，四分类全覆盖）：
 ///
-/// 覆盖率实测（2023–2026 各 4 个月，共 **1119** 条动画）：
+/// | 类型 | 条数 | 旧 47 词单层 | 仅 Tier1 | **Tier1 + Tier2** | + Tier3 |
+/// |---|---|---|---|---|---|
+/// | TV | 1150 | 87.1% | 83.0% | **90.4%** | 99.6% |
+/// | WEB | 657 | 68.0% | 67.3% | **81.4%** | 97.9% |
+/// | 剧场版 | 268 | 63.8% | 62.3% | **74.6%** | 98.9% |
+/// | OVA | 16 | 87.5% | 87.5% | **100%** | 100% |
+/// | **合计** | **2091** | 78.1% | 75.4% | **85.7%** | 98.9% |
 ///
-/// | 口径 | 覆盖率 |
-/// |---|---|
-/// | 旧 47 词单层 | 88.0% |
-/// | 仅 Tier1 | 83.7% |
-/// | **Tier1 + Tier2** | **90.9%** |
-/// | Tier1 + Tier2 + Tier3（平台/地区） | 99.6% |
+/// 结论：**TV 类（主 tab）90.4%**，**全四类合计 85.7%**。
+/// 注意别把 TV 单类的数字当成全局 —— 早期只测 TV 时算出的"99.6%"不能推广到四类。
+/// 四类之间的差距来自**数据本身**而非词表：WEB/剧场版里大量欧美网络动画、短片在
+/// bgm.tv 上没人投中文 tag，加词救不回来 —— 实测空卡里"池里有白名单外词"的只有个位数，
+/// 且全是人名（`Albert.Birney` / `三浦莉希` / `山下清悟`）。
 ///
-/// 本实现**只做到 Tier1+Tier2 ≈ 90%**，不设 Tier3：补上 Tier3 虽然能到 99.6%，
-/// 但代价是卡片上会出现「TV／日本」这种零信息量的标签。剩下约 9% 拿不到词的条目，
-/// 其 tag 本身就只给了平台+地区（如 `TV/日本`、`TV/欧美`），属预期内空白。
+/// **不设 Tier3**（平台/地区）：加上它能到 98.9%，但填进去的是「WEB／剧场版／中国／日本」，
+/// 比空着更没信息量。两份文档对此结论一致：宁可留空，Tier3 默认关。
 const Set<String> kBangumiTagTier1 = {
   // Tier1 题材（27）
   '奇幻', '战斗', '恋爱', '日常', '校园', '科幻', '喜剧', '玄幻', '冒险', '悬疑', '百合',
@@ -165,26 +174,37 @@ class BangumiBrowseItem {
     int? eps;
     if (json['eps'] is num) eps = (json['eps'] as num).toInt();
 
+    // ⚠️ meta_tags 服务端会带重复（实测 60 条里 21 条中招，如
+    // ["TV","TV","日本","日本","奇幻","奇幻"]，倍数 2~6 不定且不保证相邻成对）
+    // ⇒ 解析时就去重，下游才不用再防
     final metaTags = <String>[];
     if (json['meta_tags'] is List) {
       for (final t in json['meta_tags'] as List) {
-        if (t is String) metaTags.add(t);
+        if (t is String && !metaTags.contains(t)) metaTags.add(t);
       }
     }
 
-    // 双层挑词：候选 = meta_tags（平台人工摘要，受控词表，置前）
-    //            + tags（全量投票词，按票数降序，作补充）
-    // 两个字段都随列表接口一起返回，**无需额外请求详情**（P1-2）
-    final voted = <String>[];
+    // 候选词池 = tags（用户投票全量词）+ meta_tags（服务端结构化摘要），**取并集**
+    //
+    // - tags 显式按 count 降序，不赌接口已排好序（顺序即"票数高者优先"的依据）
+    // - 为什么要并集：meta_tags 是服务端为塞平台/地区/来源而精挑的摘要，会把题材词挤掉。
+    //   实例 [276787] 梅比乌斯之尘：meta_tags 只有「TV 日本 原创」，
+    //   题材词 科幻(54票)/战斗(29票) 全在 tags 里 —— 只吃 meta_tags 就全丢了
+    // - 反过来 meta_tags 里也有票数不高的词（服务端认定重要），所以两边都要
+    // - 两个字段都随 v0 列表接口 `/v0/subjects` 一次返回 ⇒ **零额外请求**，
+    //   也**不需要详情补拉**（实测详情 tags 与列表 tags 逐字节一致，一个空卡都救不了）
+    final voted = <Map>[];
     if (json['tags'] is List) {
       for (final t in json['tags'] as List) {
-        if (t is Map) {
-          final name = t['name'];
-          if (name is String) voted.add(name);
-        }
+        if (t is Map && t['name'] is String) voted.add(t);
       }
     }
-    final tags = pickBangumiTags([...metaTags, ...voted]);
+    voted.sort((a, b) => _voteCount(b).compareTo(_voteCount(a)));
+
+    final tags = pickBangumiTags([
+      for (final t in voted) t['name'] as String,
+      ...metaTags,
+    ]);
 
     return BangumiBrowseItem(
       id: (json['id'] as num?)?.toInt() ?? 0,
@@ -198,6 +218,12 @@ class BangumiBrowseItem {
       metaTags: metaTags,
       totalEpisodes: eps,
     );
+  }
+
+  /// tags[].count 票数（缺失/非数值按 0 处理）
+  static int _voteCount(Map t) {
+    final c = t['count'];
+    return c is num ? c.toInt() : 0;
   }
 
   /// 图片质量变体 fallback 链（P1-1：任一变体可能缺失）

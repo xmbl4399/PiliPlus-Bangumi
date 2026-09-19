@@ -173,16 +173,22 @@ abstract final class BangumiHttp {
     throw lastError ?? Exception('Bangumi 网络请求失败');
   }
 
-  /// 用指定基地址分页拉全一个月（limit=100，offset 翻页，安全上限 500）
+  /// 用指定基地址分页拉全一个月（limit=100，offset 翻页）
+  ///
+  /// ⚠️ v0 的 `total` 是**总条数**（p1 的 total 是**总页数**，语义相反，用错会翻页死循环）。
+  /// `limit` 上限就是 100，传 200 会 HTTP 400。
   static Future<List<dynamic>> _fetchAllPages({
     required String base,
     required BangumiBrowseMode mode,
     required int year,
     required int month,
   }) async {
+    const pageSize = 100;
+    const maxOffset = 500; // 安全上限（单月条目远小于此）
     final rawList = <dynamic>[];
     final seenIds = <int>{};
     var offset = 0;
+    var received = 0;
     while (true) {
       final res = await _client.getUri<dynamic>(
         Uri.parse('$base/v0/subjects').replace(
@@ -193,13 +199,15 @@ abstract final class BangumiHttp {
             'cat': '${mode.cat}',
             'year': '$year',
             'month': '$month',
-            'limit': '100',
+            'limit': '$pageSize',
             'offset': '$offset',
           },
         ),
       );
-      final data = res.data is Map ? res.data['data'] : null;
+      final body = res.data;
+      final data = body is Map ? body['data'] : null;
       if (data is! List) break;
+      received += data.length;
       for (final e in data) {
         if (e is! Map) continue;
         // 韩剧：cat=6001 按 meta_tags 含「韩国」过滤（写缓存前过滤，P0-5）
@@ -213,9 +221,11 @@ abstract final class BangumiHttp {
         if (id == null || !seenIds.add(id)) continue;
         rawList.add(e);
       }
-      if (data.length < 100) break;
-      offset += 100;
-      if (offset > 500) break; // 安全上限
+      if (data.length < pageSize) break;
+      final total = body is Map ? body['total'] : null;
+      if (total is num && received >= total.toInt()) break;
+      offset += pageSize;
+      if (offset >= maxOffset) break;
     }
     return rawList;
   }
