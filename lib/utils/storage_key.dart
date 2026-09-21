@@ -134,6 +134,7 @@ abstract final class SettingBoxKey {
       hideNoScoreMedia = 'hideNoScoreMedia',
       bangumiSourceData = 'bangumiSourceData',
       bangumiApiBaseUrl = 'bangumiApiBaseUrl',
+      bangumiCoverQuality = 'bangumiCoverQuality',
       pageTransition = 'pageTransition',
       optTabletNav = 'optTabletNav',
       banWordForDyn = 'banWordForDyn',

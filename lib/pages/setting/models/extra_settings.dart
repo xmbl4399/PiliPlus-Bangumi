@@ -23,6 +23,8 @@ import 'package:PiliPlus/models/common/sponsor_block/skip_type.dart';
 import 'package:PiliPlus/models/common/super_resolution_type.dart';
 import 'package:PiliPlus/models/dynamics/result.dart'
     show DynamicsDataModel, ItemModulesModel;
+import 'package:PiliPlus/models_new/bangumi/bangumi_browse_item.dart'
+    show kBangumiCoverQualities;
 import 'package:PiliPlus/pages/common/slide/common_slide_page.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
@@ -469,6 +471,17 @@ List<SettingsModel> get extraSettings => [
     onChanged: (value) => BangumiHttp.clearAllBrowseCache(),
   ),
   NormalModel(
+    title: '封面画质',
+    leading: const Icon(Icons.image_outlined),
+    getSubtitle: () {
+      final w = Pref.bangumiCoverQuality;
+      return kBangumiCoverQualities
+          .firstWhere((e) => e.$1 == w, orElse: () => (w, 'r$w'))
+          .$2;
+    },
+    onTap: (context, setState) => selectBangumiCoverQuality(context, setState),
+  ),
+  NormalModel(
     title: 'Bangumi API 地址',
     leading: const Icon(Icons.dns_outlined),
     getSubtitle: () {
@@ -735,6 +748,31 @@ List<SettingsModel> get extraSettings => [
     },
   ),
 ];
+
+/// 选择 Bangumi 封面挡位（r100 / r200 / r400 / r600 / r800 / 原图）
+///
+/// 挡位只是封面 URL 里的 `/r/N/` 段，所以存完设置**不用清缓存、不用重拉网络**，
+/// 回到 bgm.tv 浏览页重新解析缓存即生效（[BangumiBrowseItem.coverUrl] 渲染时取值）。
+Future<void> selectBangumiCoverQuality(
+  BuildContext context,
+  VoidCallback setState,
+) async {
+  final current = Pref.bangumiCoverQuality;
+  final res = await showDialog<int>(
+    context: context,
+    builder: (context) => SelectDialog<int>(
+      title: '封面画质',
+      value: kBangumiCoverQualities.any((e) => e.$1 == current)
+          ? current
+          : null,
+      values: kBangumiCoverQualities,
+    ),
+  );
+  if (res != null && res != current && context.mounted) {
+    GStorage.setting.put(SettingBoxKey.bangumiCoverQuality, res);
+    setState();
+  }
+}
 
 Future<void> audioNormalization(
   BuildContext context,

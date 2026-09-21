@@ -627,6 +627,14 @@ abstract final class Pref {
   static String get bangumiApiBaseUrl =>
       _setting.get(SettingBoxKey.bangumiApiBaseUrl, defaultValue: '');
 
+  /// Bangumi 封面挡位（px，0 = 原图），默认 **200**
+  ///
+  /// 挡位写在封面 URL 路径里（`/r/N/`），改它只是改写 URL，不需要清缓存重拉。
+  static int get bangumiCoverQuality {
+    final v = _setting.get(SettingBoxKey.bangumiCoverQuality);
+    return v is num ? v.toInt() : 200;
+  }
+
   static num get maxCacheSize =>
       _setting.get(SettingBoxKey.maxCacheSize) ?? 1 << 30;
 

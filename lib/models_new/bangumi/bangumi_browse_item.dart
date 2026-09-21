@@ -1,4 +1,5 @@
 import 'package:PiliPlus/http/bangumi.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 
 /// # tag 双层词表（Tier1 题材 / Tier2 来源·受众）
 ///
@@ -76,6 +77,58 @@ List<String> pickBangumiTags(Iterable<String> names, {int max = 2}) {
   return [...tier1, ...tier2].take(max).toList(growable: false);
 }
 
+/// # 封面挡位（bgm.tv 图片 CDN）
+///
+/// bgm 封面 URL 的宽度**直接写在路径里**，CDN 按需缩放：
+///
+/// ```
+/// https://lain.bgm.tv/r/400/pic/cover/l/89/d9/484686_m5DT9.jpg
+///                   ^^^^^^^
+/// ```
+///
+/// 所以任意宽度都能靠改写这一段得到，**不必受接口给的 5 个预设键限制**。
+/// 接口 `images` 只提供：`grid`=100 / `small`=200 / `common`=400 /
+/// `medium`=800 / `large`=原图（无 `/r/N/` 段）。
+/// 实测 CDN 认任意宽度（r100/r200/r400/r600/r800 逐一拉过，像素与文件名大小均符合预期）。
+///
+/// (宽度, 名称)；宽度 **0 = 原图**（去掉 `/r/N/` 段）
+///
+/// 括号内文件大小来自实测：`lain.bgm.tv` 上一张 640×905 的竖版海报，
+/// 具体数值随原图大小浮动，仅供参考。
+const List<(int, String)> kBangumiCoverQualities = [
+  (100, '最低 r100（约 5 KB/张 · 1× 屏够用）'),
+  (200, '低 r200（约 17 KB/张 · 2× 屏偏紧）'),
+  (400, '标准 r400（约 55 KB/张 · 3× 屏清晰）'),
+  (600, '高 r600（约 106 KB/张）'),
+  (800, '很高 r800（约 113 KB/张）'),
+  (0, '原图（约 130 KB/张 · 慎选）'),
+];
+
+/// 封面挡位默认值 **200**（省流量优先）
+const int kBangumiCoverQualityDefault = 200;
+
+/// 把 bgm 封面 URL 改写成指定宽度挡位（渲染时调用，所以改设置即时生效）。
+///
+/// - `width <= 0` → 原图：去掉 `/r/N/` 段
+/// - URL 本来没有 `/r/N/` 段（即原图）→ 在域名后插入该段
+/// - 既不改文件名也不改子路径，`pic/cover/l/…` 部分原样保留
+String bangumiCoverUrl(String url, int width) {
+  if (width <= 0) {
+    // 用它换成 '/' 而不是删空：`/r/N/` 两端的斜杠都是分隔符，
+    // 删空会让域名与 `pic` 粘成 `lain.bgm.tvpic`
+    return url.replaceFirst(_reCoverWidth, '/');
+  }
+  if (_reCoverWidth.hasMatch(url)) {
+    return url.replaceFirst(_reCoverWidth, '/r/$width/');
+  }
+  // 原图 URL 无 `/r/N/` 段：插到域名之后（用匹配位置，别手算下标，容易多一个斜杠）
+  final host = _reHost.firstMatch(url);
+  return host == null ? url : url.replaceRange(host.end, host.end, '/r/$width');
+}
+
+final RegExp _reCoverWidth = RegExp(r'/r/\d+/');
+final RegExp _reHost = RegExp(r'^[a-z]+://[^/]+');
+
 /// bgm.tv /v0/subjects 浏览模式（Bangumi_Integration_Guide §2.2/§4）
 enum BangumiBrowseMode {
   tvAnime('TV', 2, 1, showTags: true, showEpisodes: true),
@@ -133,7 +186,10 @@ class BangumiBrowseItem {
   final int id;
   final String name;
   final String nameCn;
-  final String? coverUrl;
+
+  /// 原图 URL（bgm CDN 上不带 `/r/N/` 挡位段的那个）；渲染请用 [coverUrl]
+  final String? coverRaw;
+
   final String? airDate;
   final double? score;
   final String? summary;
@@ -145,7 +201,7 @@ class BangumiBrowseItem {
     required this.id,
     required this.name,
     required this.nameCn,
-    this.coverUrl,
+    this.coverRaw,
     this.airDate,
     this.score,
     this.summary,
@@ -154,10 +210,14 @@ class BangumiBrowseItem {
     this.totalEpisodes,
   });
 
-  factory BangumiBrowseItem.fromJson(
-    Map<String, dynamic> json, {
-    String imageQuality = 'medium',
-  }) {
+  /// 按「设置 → 封面画质」输出的封面 URL。
+  ///
+  /// 挡位在**渲染时**才拼进 URL，所以改设置不必清缓存、不必重拉网络，回页面即生效。
+  String? get coverUrl => coverRaw == null
+      ? null
+      : bangumiCoverUrl(coverRaw!, Pref.bangumiCoverQuality);
+
+  factory BangumiBrowseItem.fromJson(Map<String, dynamic> json) {
     double? score;
     final rating = json['rating'];
     if (rating is Map) {
@@ -169,7 +229,7 @@ class BangumiBrowseItem {
       }
     }
 
-    String? cover = _pickImage(json['images'], imageQuality);
+    final String? cover = _pickImage(json['images']);
 
     int? eps;
     if (json['eps'] is num) eps = (json['eps'] as num).toInt();
@@ -210,7 +270,7 @@ class BangumiBrowseItem {
       id: (json['id'] as num?)?.toInt() ?? 0,
       name: json['name'] is String ? json['name'] : '',
       nameCn: json['name_cn'] is String ? json['name_cn'] : '',
-      coverUrl: cover,
+      coverRaw: cover,
       airDate: json['date'] is String ? json['date'] : null,
       score: score,
       summary: json['summary'] is String ? json['summary'] : null,
@@ -226,22 +286,18 @@ class BangumiBrowseItem {
     return c is num ? c.toInt() : 0;
   }
 
-  /// 图片质量变体 fallback 链（P1-1：任一变体可能缺失）
-  static String? _pickImage(dynamic images, String quality) {
+  /// 取**源图** URL：优先原图 `large`，逐级降级（P1-1：任一变体可能缺失）
+  ///
+  /// 这里只挑"源"，不定挡位 —— 挡位由 [coverUrl] 在渲染时按设置改写（见 [bangumiCoverUrl]）。
+  /// 取 large 作源的好处：它与 small/grid/common/medium 只是同一路径多一个 `/r/N/` 段，
+  /// 所以任意挡位都能从中得到，不会因为选了某个预设键就丢掉更清晰的源。
+  static String? _pickImage(dynamic images) {
     if (images is! Map) return null;
-    String? pick(List<String> keys) {
-      for (final k in keys) {
-        final v = images[k];
-        if (v is String && v.isNotEmpty) return v;
-      }
-      return null;
+    for (final k in const ['large', 'medium', 'common', 'small', 'grid']) {
+      final v = images[k];
+      if (v is String && v.isNotEmpty) return v;
     }
-
-    return switch (quality) {
-      'small' => pick(['small', 'common', 'medium']),
-      'large' => pick(['medium', 'large', 'common']),
-      _ => pick(['common', 'medium', 'large']),
-    };
+    return null;
   }
 
   /// 优先 name_cn，否则 name（P0-4：56% 日剧无 name_cn，必须容错）
