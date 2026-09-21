@@ -35,6 +35,7 @@
 - 卡片流派标签采用**双层词表**：Tier1 题材优先，Tier2 来源/受众补满槽位；Tier3（平台/地区）默认关
 - 点击条目直达 B 站搜索，长按复制标题；下拉刷新首月停圈、其余月份流式追加
 - 设置中可「隐藏无评分条目」（默认开），或关闭「Bangumi 源数据」回退原版页面
+- 设置中可切「封面画质」：r100 / **r200（默认）** / r400 / r600 / r800 / 原图（bgm 图片 CDN 按 URL 里的 `/r/N/` 段实时缩放）
 
 <img src="assets/screenshots/bangumi_anime.png" width="32%" alt="番剧" />
 <img src="assets/screenshots/bangumi_cinema.png" width="32%" alt="影视" />
