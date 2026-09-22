@@ -113,7 +113,10 @@ class _BangumiBrowsePageState extends State<BangumiBrowsePage>
     crossAxisSpacing: Style.cardSpace,
     maxCrossAxisExtent: Grid.smallCardWidth * 0.6,
     childAspectRatio: 0.75,
-    mainAxisExtent: MediaQuery.textScalerOf(context).scale(50),
+    // 封面下方留给标题的高度，必须紧贴文字实际需要的高度，否则多出来的部分
+    // 会变成卡片底部一片空白灰（标题只占 2 行，Expanded 撑满后空白全落在文字下方）。
+    // 组成：上内边距 4 + 2 行 × (bodySmall 12sp × height 1.25 = 15) + 下内边距 4 = 38
+    mainAxisExtent: MediaQuery.textScalerOf(context).scale(38),
   );
 
   @override
