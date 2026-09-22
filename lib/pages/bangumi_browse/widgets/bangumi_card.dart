@@ -7,11 +7,22 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// 徽章底色：黑 70%（原来只有 54%，压在亮封面上会糊）
+const _kBadgeBg = Color(0xB3000000);
+
+/// 徽章描边：白 24% 发丝线 —— 封面偏暗时靠它把徽章边缘勾出来
+const _kBadgeBorder = Border.fromBorderSide(
+  BorderSide(color: Color(0x3DFFFFFF), width: 0.5),
+);
+
 /// bgm.tv 条目卡片（Bangumi_Integration_Guide §5.2）
-/// - 评分徽章：右上角，score>=7 金色高亮，否则半透明；无评分隐藏
+/// - 评分徽章：右上角，score>=7 金色高亮；无评分隐藏
 /// - 流派 tag：左上角最多 2 个（仅动画）
 /// - 集数：左下角（仅 TV 动画）
 /// - 点击 → B 站搜索 searchKeyword；长按 → 复制 searchKeyword
+///
+/// 徽章可读性：封面色彩不可控（有亮有暗），所以统一用「黑底 0.7 + 白色细描边」，
+/// 文字一律纯白加粗（评分 >=7 用金色），字号 11.5/12.5。
 class BangumiCard extends StatelessWidget {
   const BangumiCard({super.key, required this.item, required this.mode});
 
@@ -59,7 +70,7 @@ class BangumiCard extends StatelessWidget {
                             children: [
                               for (final tag in item.tags.take(2))
                                 Padding(
-                                  padding: const EdgeInsets.only(bottom: 3),
+                                  padding: const EdgeInsets.only(bottom: 4),
                                   child: _miniBadge(tag),
                                 ),
                             ],
@@ -78,7 +89,8 @@ class BangumiCard extends StatelessWidget {
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(4, 5, 2, 3),
+                // 上下对称 4，配合 grid 的 mainAxisExtent 38（4 + 2×15 + 4）
+                padding: const EdgeInsets.fromLTRB(4, 4, 2, 4),
                 child: Text(
                   item.displayTitle,
                   textAlign: TextAlign.start,
@@ -102,35 +114,40 @@ class BangumiCard extends StatelessWidget {
     final score = item.score!;
     final highlight = score >= 7;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: const BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.all(Radius.circular(4)),
+        color: _kBadgeBg,
+        border: _kBadgeBorder,
+        borderRadius: BorderRadius.all(Radius.circular(6)),
       ),
       child: Text(
         score.toStringAsFixed(1),
         style: TextStyle(
-          fontSize: 11,
+          fontSize: 12.5,
           height: 1.2,
-          color: highlight ? const Color(0xFFFFD54F) : Colors.white70,
-          fontWeight: highlight ? FontWeight.bold : null,
+          color: highlight ? const Color(0xFFFFD54F) : Colors.white,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.2,
         ),
       ),
     );
   }
 
   Widget _miniBadge(String text) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
     decoration: const BoxDecoration(
-      color: Colors.black54,
-      borderRadius: BorderRadius.all(Radius.circular(3)),
+      color: _kBadgeBg,
+      border: _kBadgeBorder,
+      borderRadius: BorderRadius.all(Radius.circular(5)),
     ),
     child: Text(
       text,
       style: const TextStyle(
-        fontSize: 10,
+        fontSize: 11.5,
         height: 1.2,
-        color: Colors.white70,
+        color: Colors.white,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.2,
       ),
     ),
   );
