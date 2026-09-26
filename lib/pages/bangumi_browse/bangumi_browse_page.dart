@@ -1,12 +1,13 @@
+import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/button/more_btn.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
-import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/bangumi/bangumi_browse_item.dart';
 import 'package:PiliPlus/pages/bangumi_browse/bangumi_browse_controller.dart';
 import 'package:PiliPlus/pages/bangumi_browse/widgets/bangumi_card.dart';
+import 'package:PiliPlus/pages/bangumi_browse/widgets/bangumi_card_skeleton.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -195,10 +196,24 @@ class _BangumiBrowsePageState extends State<BangumiBrowsePage>
     final segments = controller.segments;
     if (segments.isEmpty) {
       if (controller.yearLoading.value) {
+        // 首屏骨架屏：月份标题占位 + 一屏卡片占位（替代居中转圈）。
+        // 骨架与真卡片同格子尺寸，数据到达后原地替换，不跳版。
         return CustomScrollView(
           controller: controller.scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
-          slivers: const [SliverFillRemaining(child: m3eLoading)],
+          slivers: [
+            const SliverToBoxAdapter(child: BangumiMonthHeaderSkeleton()),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: Style.safeSpace),
+              sliver: SliverGrid(
+                gridDelegate: gridDelegate,
+                delegate: const SliverSingleChildDelegate(
+                  count: 9,
+                  child: BangumiCardSkeleton(),
+                ),
+              ),
+            ),
+          ],
         );
       }
       return _emptyView('暂无数据，下拉刷新重试');
