@@ -17,22 +17,40 @@ import 'package:path/path.dart' as path;
 abstract final class BangumiHttp {
   static const _officialBaseUrl = 'https://api.bgm.tv';
 
-  /// 社区镜像（非官方，遇 DNS 污染/被墙时自动备用，见 bgm.tv 官方论坛镜像帖）
-  static const _mirrorBaseUrl = 'https://api.bangumi.lol';
+  /// 社区反代（非官方，见 bgm.tv 官方论坛镜像/反代帖）。
+  ///
+  /// ⚠️ 旧的 `https://api.bangumi.lol` 已于 2026-09 停服（连根路径都 404），**勿再启用** ——
+  /// 它曾导致"官方被墙 → 轮到死镜像 → DNS 也解析不出 → 整页报错"。
+  ///
+  /// 以下两个为 2026-09-26 实测可用，且返回字段与官方**逐字一致**
+  /// （tags / meta_tags / eps / summary / date / rating 全在），
+  /// 封面 URL 会被反代改写成自己的图片域名，但**路径结构不变**
+  /// （`/r/200/pic/cover/...`），故 `bangumiCoverUrl` 的挡位改写照常适用。
+  static const mirrorBaseUrls = <String>[
+    'https://bgm.retr0.xyz/8d7db5cae', // 反代（带路径前缀），实测 ~3.7s
+    'https://bgmapi.anibt.net', // 反代，实测 ~3.6s
+  ];
+
+  /// 单源最多尝试次数（首次 + 2 次重试）。
+  /// 偶发 DNS/连接失败多为瞬时，退避后重试同一源往往就能过。
+  static const _maxAttemptsPerSource = 3;
+  static const _retryBackoff = <Duration>[
+    Duration(milliseconds: 300),
+    Duration(milliseconds: 800),
+  ];
 
   static const _cacheVersion = 'v6';
   static const _userAgent =
       'PiliPlus/2.1 (https://github.com/bggRGjQaUbCoE/PiliPlus; bangumi)';
 
-  /// 候选基地址（按顺序尝试）：设置里的自建反代/镜像优先，其次官方，最后社区镜像
+  /// 候选基地址（按顺序尝试）：设置里的自建反代优先，其次官方，最后社区反代
   static List<String> get _candidates {
     final custom = Pref.bangumiApiBaseUrl.trim();
-    final list = <String>[
+    return <String>{
       if (custom.isNotEmpty) custom,
       _officialBaseUrl,
-      _mirrorBaseUrl,
-    ];
-    return list.toSet().toList();
+      ...mirrorBaseUrls,
+    }.toList();
   }
 
   static Dio? _dio;
@@ -71,12 +89,21 @@ abstract final class BangumiHttp {
       : const Duration(days: 30);
 
   /// 读缓存，返回原始条目 JSON 列表；过期/缺失返回 null
-  static List<dynamic>? _readCache(String file, int year) {
+  ///
+  /// [ignoreTtl] 为 true 时忽略时效直接返回（用于网络全挂时的兜底，
+  /// 宁可显示旧数据也别把技术栈报错甩给用户）。
+  static List<dynamic>? _readCache(
+    String file,
+    int year, {
+    bool ignoreTtl = false,
+  }) {
     try {
       final f = File(file);
       if (!f.existsSync()) return null;
-      final age = DateTime.now().difference(f.lastModifiedSync());
-      if (age > _cacheTtl(year)) return null;
+      if (!ignoreTtl) {
+        final age = DateTime.now().difference(f.lastModifiedSync());
+        if (age > _cacheTtl(year)) return null;
+      }
       final raw = jsonDecode(f.readAsStringSync());
       if (raw is List) return raw;
     } catch (_) {}
@@ -134,7 +161,10 @@ abstract final class BangumiHttp {
     }
   }
 
-  /// 拉全某年某月条目（缓存优先；网络失败自动切换候选基地址）
+  /// 拉全某年某月条目（缓存优先；失败自动「同源重试 → 换源」三级兜底）
+  ///
+  /// 兜底链：同一源退避重试 2 次 → 换下一个候选源（官方 ⇄ 反代）
+  /// → 全部失败时退回过期缓存 → 仍无缓存才抛 [BangumiNetworkException]。
   static Future<List<BangumiBrowseItem>> fetchYearMonth({
     required BangumiBrowseMode mode,
     required int year,
@@ -147,30 +177,79 @@ abstract final class BangumiHttp {
       return _parse(cached);
     }
 
+    final candidates = _candidates;
     Object? lastError;
-    for (final base in _candidates) {
-      try {
-        final rawList = await _fetchAllPages(
-          base: base,
-          mode: mode,
-          year: year,
-          month: month,
-        );
-        _writeCache(file, rawList);
-        return _parse(rawList);
-      } on DioException catch (e) {
-        // 仅网络类错误触发备用地址切换；业务/解析错误直接抛出
-        final isNetwork =
-            e.type == DioExceptionType.connectionError ||
-            e.type == DioExceptionType.connectionTimeout ||
-            e.type == DioExceptionType.receiveTimeout ||
-            e.type == DioExceptionType.sendTimeout ||
-            e.type == DioExceptionType.unknown;
-        if (!isNetwork) rethrow;
-        lastError = e;
+    for (final base in candidates) {
+      for (var attempt = 0; attempt < _maxAttemptsPerSource; attempt++) {
+        try {
+          final rawList = await _fetchAllPages(
+            base: base,
+            mode: mode,
+            year: year,
+            month: month,
+          );
+          _writeCache(file, rawList);
+          return _parse(rawList);
+        } on DioException catch (e) {
+          // 仅「重试/换源有意义」的错误才继续；业务类错误直接抛出
+          if (!_isRetryable(e)) rethrow;
+          lastError = e;
+          if (attempt + 1 < _maxAttemptsPerSource) {
+            await Future.delayed(_retryBackoff[attempt]);
+          }
+        }
       }
     }
-    throw lastError ?? Exception('Bangumi 网络请求失败');
+
+    // 全线失败：退回过期缓存（stale-while-error），别把 DioException 原文甩给用户
+    final stale = _readCache(file, year, ignoreTtl: true);
+    if (stale != null) return _parse(stale);
+
+    throw BangumiNetworkException(
+      _describeNetworkFailure(lastError, candidates.length),
+    );
+  }
+
+  /// 该错误是否值得重试 / 换源
+  ///
+  /// - 连接类（含 DNS 解析失败，dio 多归为 `connectionError` 或 `unknown`）⇒ 是
+  /// - HTTP 5xx / 404 / 429 / 408 ⇒ 是（镜像、反代挂掉的典型响应）
+  /// - 其余 4xx（参数错误等）⇒ 否，重试与换源都无意义
+  static bool _isRetryable(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionError:
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.unknown:
+        return true;
+      case DioExceptionType.badResponse:
+        final code = e.response?.statusCode ?? 0;
+        return code >= 500 || code == 404 || code == 408 || code == 429;
+      case DioExceptionType.transformTimeout:
+        return true;
+      case DioExceptionType.badCertificate:
+      case DioExceptionType.cancel:
+        return false;
+    }
+  }
+
+  /// DNS 解析失败（`Failed host lookup` / errno 7）
+  static bool _isDnsFailure(Object? e) {
+    if (e is! DioException) return false;
+    final err = e.error;
+    if (err is! SocketException) return false;
+    final text = '${err.osError?.message ?? ''} ${err.message}'.toLowerCase();
+    return text.contains('host lookup') ||
+        text.contains('no address associated');
+  }
+
+  /// 面向用户的失败文案（不暴露 DioException 技术栈）
+  static String _describeNetworkFailure(Object? lastError, int sourceCount) {
+    if (_isDnsFailure(lastError)) {
+      return '域名解析失败（DNS），已尝试 $sourceCount 个接口源\n请检查网络 / DNS / 代理后重试';
+    }
+    return '网络请求失败，已尝试 $sourceCount 个接口源\n请检查网络后重试';
   }
 
   /// 用指定基地址分页拉全一个月（limit=100，offset 翻页）
@@ -238,4 +317,17 @@ abstract final class BangumiHttp {
       ..sort(_compare);
     return items;
   }
+}
+
+/// Bangumi 接口**全部候选源**都不可达时抛出。
+///
+/// `toString()` 直接是面向用户的中文短句 —— 调用方 `Error(e.toString())`
+/// 会原样渲染到页面，故这里不能带 DioException 技术栈。
+class BangumiNetworkException implements Exception {
+  const BangumiNetworkException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }

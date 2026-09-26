@@ -479,7 +479,7 @@ List<SettingsModel> get extraSettings => [
           .firstWhere((e) => e.$1 == w, orElse: () => (w, 'r$w'))
           .$2;
     },
-    onTap: (context, setState) => selectBangumiCoverQuality(context, setState),
+    onTap: selectBangumiCoverQuality,
   ),
   NormalModel(
     title: 'Bangumi API 地址',
@@ -508,24 +508,27 @@ List<SettingsModel> get extraSettings => [
                 ),
               ),
               const SizedBox(height: 10),
-              // 快捷预设：官方 / 社区镜像（bgm 官方论坛推荐的镜像，遇 DNS 污染备用）
-              Row(
+              // 快捷预设：官方 / 社区反代（官方被墙或 DNS 污染时备用）
+              // ⚠️ 旧的 api.bangumi.lol 已停服（404），故不再作为预设
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   ActionChip(
-                    label: const Text('官方'),
+                    label: const Text('官方 api.bgm.tv'),
                     onPressed: () {
                       valueStr = '';
                       controller.text = '';
                     },
                   ),
-                  const SizedBox(width: 8),
-                  ActionChip(
-                    label: const Text('镜像 api.bangumi.lol'),
-                    onPressed: () {
-                      valueStr = 'https://api.bangumi.lol';
-                      controller.text = valueStr;
-                    },
-                  ),
+                  for (final base in BangumiHttp.mirrorBaseUrls)
+                    ActionChip(
+                      label: Text(Uri.parse(base).host),
+                      onPressed: () {
+                        valueStr = base;
+                        controller.text = valueStr;
+                      },
+                    ),
                 ],
               ),
             ],
