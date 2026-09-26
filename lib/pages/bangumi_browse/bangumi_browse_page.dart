@@ -8,6 +8,7 @@ import 'package:PiliPlus/models_new/bangumi/bangumi_browse_item.dart';
 import 'package:PiliPlus/pages/bangumi_browse/bangumi_browse_controller.dart';
 import 'package:PiliPlus/pages/bangumi_browse/widgets/bangumi_card.dart';
 import 'package:PiliPlus/pages/bangumi_browse/widgets/bangumi_card_skeleton.dart';
+import 'package:PiliPlus/pages/bangumi_browse/widgets/follow_top_bar.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -45,9 +46,8 @@ class _BangumiSectionPageState extends State<BangumiSectionPage>
     final theme = Theme.of(context);
     return Column(
       children: [
-        SizedBox(
+        FollowTopBar(
           height: 40,
-          width: double.infinity,
           child: TabBar(
             controller: controller.tabController,
             tabs: controller.modes.map((m) => Tab(text: m.label)).toList(),
@@ -143,9 +143,8 @@ class _BangumiBrowsePageState extends State<BangumiBrowsePage>
     final years = <int>[
       for (var y = controller.currentYear; y >= kBangumiEarliestYear; y--) y,
     ];
-    return SizedBox(
+    return FollowTopBar(
       height: 42,
-      width: double.infinity,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: Style.safeSpace),
