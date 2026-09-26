@@ -84,14 +84,29 @@ jobs:
 
             - name: Write key
               if: github.event_name == 'workflow_dispatch'
+              # 二改：签名 secrets 缺失时不再静默回落 debug 签名
+              # （debug keystore 每个 runner 现生成，指纹互异 ⇒ 用户每次升级都要先卸载）
+              env:
+                  SIGN_KEYSTORE_BASE64: ${{ secrets.SIGN_KEYSTORE_BASE64 }}
+                  KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+                  KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+                  KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
               run: |
-                  if [ ! -z "${{ secrets.SIGN_KEYSTORE_BASE64 }}" ]; then
-                    echo "${{ secrets.SIGN_KEYSTORE_BASE64 }}" | base64 --decode > android/app/key.jks
-                    echo storeFile='key.jks' >> android/key.properties
-                    echo storePassword='${{ secrets.KEYSTORE_PASSWORD }}' >> android/key.properties
-                    echo keyAlias='${{ secrets.KEY_ALIAS }}' >> android/key.properties
-                    echo keyPassword='${{ secrets.KEY_PASSWORD }}' >> android/key.properties
-                  fi
+                  set -euo pipefail
+                  for s in SIGN_KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+                    if [ -z "${!s:-}" ]; then
+                      echo "::error::secret $s 未配置，拒绝以 debug 签名发版"
+                      exit 1
+                    fi
+                  done
+                  echo "$SIGN_KEYSTORE_BASE64" | base64 --decode > android/app/key.jks
+                  {
+                    echo "storeFile=key.jks"
+                    echo "storePassword=$KEYSTORE_PASSWORD"
+                    echo "keyAlias=$KEY_ALIAS"
+                    echo "keyPassword=$KEY_PASSWORD"
+                  } >> android/key.properties
+                  keytool -list -keystore android/app/key.jks -storepass "$KEYSTORE_PASSWORD" | grep -i "SHA-256" || true
 
             - name: Set and Extract version
               if: ${{ github.event_name == 'workflow_dispatch' }}
