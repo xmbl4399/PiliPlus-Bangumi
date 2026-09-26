@@ -2,6 +2,18 @@ import 'package:PiliPlus/common/skeleton/skeleton.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// 占位块颜色
+///
+/// **不要用项目其他骨架屏惯用的 `onInverseSurface`**：那张卡片的底色是
+/// surfaceContainer 系，720p 模拟器实测「卡片底 = rgb(243,244,239)」而
+/// `onInverseSurface` = rgb(240,241,236) —— 只差 3 个色阶，封面勉强能看出、
+/// 10dp 高的标题条基本看不见（第一版就是栽在这里）。
+///
+/// 改用 `onSurface` 的低透明度叠加：浅色主题下压暗、深色主题下提亮，
+/// 与卡片底色稳定拉开约 20 个色阶，不用为两套主题各写一个硬编码灰。
+Color _blockColor(BuildContext context) =>
+    ColorScheme.of(context).onSurface.withValues(alpha: 0.1);
+
 /// 番剧/影视卡片骨架屏（首屏加载占位）
 ///
 /// 尺寸与真卡片 BangumiCard 完全对齐：Card(mdRadius) + 0.75 封面比例 +
@@ -12,7 +24,7 @@ class BangumiCardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = ColorScheme.of(context).onInverseSurface;
+    final color = _blockColor(context);
     return Skeleton(
       child: Card(
         shape: const RoundedRectangleBorder(borderRadius: Style.mdRadius),
@@ -66,7 +78,7 @@ class BangumiMonthHeaderSkeleton extends StatelessWidget {
           child: Container(
             height: 14,
             width: 88,
-            color: ColorScheme.of(context).onInverseSurface,
+            color: _blockColor(context),
           ),
         ),
       ),
