@@ -1,6 +1,7 @@
 abstract final class Constants {
   static const appName = 'PiliPlus';
-  static const sourceCodeUrl = 'https://github.com/bggRGjQaUbCoE/PiliPlus';
+  // 二改：本 fork 的源码/发行地址（关于页、更新弹窗、issue 入口均引用此处）
+  static const sourceCodeUrl = 'https://github.com/xmbl4399/PiliPlus-Bangumi';
 
   // 27eb53fc9058f8c3  移动端 Android
   // 4409e2ce8ffd12b8  HD版

@@ -37,7 +37,11 @@ abstract final class Update {
       final data = res.data[0];
       final int latest =
           DateTime.parse(data['created_at']).millisecondsSinceEpoch ~/ 1000;
-      if (BuildConfig.buildTime >= latest) {
+      // 二改：Release 的 created_at 总比**同批次** CI 构建注入的 buildTime 晚几十秒，
+      // 直接用 `>=` 比较会把"自己这个版本"判成新版本（装完立刻弹「发现新版本」）。
+      // 留 10 分钟宽限：同批次 Release 忽略，后续真版本（间隔通常以天计）照常提示。
+      const graceSeconds = 600;
+      if (BuildConfig.buildTime + graceSeconds >= latest) {
         if (!isAuto) {
           SmartDialog.showToast('已是最新版本');
         }

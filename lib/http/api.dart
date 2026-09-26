@@ -408,9 +408,9 @@ abstract final class Api {
   // 黑名单
   static const String blackLst = '/x/relation/blacks';
 
-  // github 获取最新版
+  // github 获取最新版（二改：指向本 fork 仓库，不再查上游 Releases）
   static const String latestApp =
-      'https://api.github.com/repos/bggRGjQaUbCoE/PiliPlus/releases';
+      'https://api.github.com/repos/xmbl4399/PiliPlus-Bangumi/releases';
 
   // 多少人在看
   // https://api.bilibili.com/x/player/online/total?aid=913663681&cid=1203559746&bvid=BV1MM4y1s7NZ&ts=56427838

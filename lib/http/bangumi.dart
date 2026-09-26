@@ -41,7 +41,7 @@ abstract final class BangumiHttp {
 
   static const _cacheVersion = 'v6';
   static const _userAgent =
-      'PiliPlus/2.1 (https://github.com/bggRGjQaUbCoE/PiliPlus; bangumi)';
+      'PiliPlus/2.1 (https://github.com/xmbl4399/PiliPlus-Bangumi; bangumi)';
 
   /// 候选基地址（按顺序尝试）：设置里的自建反代优先，其次官方，最后社区反代
   static List<String> get _candidates {
