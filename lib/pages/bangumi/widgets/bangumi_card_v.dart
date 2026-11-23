@@ -15,11 +15,15 @@ class BangumiCardV extends StatelessWidget {
     required this.item,
     this.showTags = true,
     this.showEpisodes = true,
+    this.coverTags = false,
   });
 
   final BangumiItem item;
   final bool showTags;
   final bool showEpisodes;
+
+  /// 是否把白名单筛出的题材 tag 贴到封面左上角（TV 番剧用）。
+  final bool coverTags;
 
   void _onTap() {
     if (item.title.isEmpty) return;
@@ -59,6 +63,19 @@ class BangumiCardV extends StatelessWidget {
                         bottom: null,
                         left: null,
                       ),
+                    if (coverTags && item.tags.isNotEmpty)
+                      Positioned(
+                        left: 6,
+                        top: 6,
+                        right: 44,
+                        child: Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: [
+                            for (final tag in item.tags) _CoverTag(tag),
+                          ],
+                        ),
+                      ),
                     if (showEpisodes && item.eps != null)
                       PBadge(
                         text: '${item.eps}话',
@@ -84,7 +101,7 @@ class BangumiCardV extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 13, height: 1.2),
                   ),
-                  if (showTags && item.tags.isNotEmpty)
+                  if (showTags && !coverTags && item.tags.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 3),
                       child: Text(
@@ -106,4 +123,31 @@ class BangumiCardV extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 封面左上角的题材 tag 徽章（白名单筛出的 ≤2 个词）。
+class _CoverTag extends StatelessWidget {
+  const _CoverTag(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: 0.72),
+      borderRadius: BorderRadius.circular(5),
+    ),
+    child: Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 10,
+        height: 1.2,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 }

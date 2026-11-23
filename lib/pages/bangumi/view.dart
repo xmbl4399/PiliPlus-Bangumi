@@ -197,7 +197,7 @@ class BangumiCalendarView extends StatelessWidget {
                     ),
                   )
                 : SliverGrid.builder(
-                    gridDelegate: _gridDelegate(context),
+                    gridDelegate: _gridDelegate(context, textExtent: 46),
                     itemCount: group.items.length,
                     itemBuilder: (context, index) => BangumiCardV(
                       item: group.items[index],
@@ -224,8 +224,12 @@ class BangumiMonthView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTv = controller.category == BangumiCategory.tvAnime;
+    final coverTags = Pref.bangumiShowTags && isTv;
     final showTags =
-        Pref.bangumiShowTags && controller.category.type == bangumiTypeAnime;
+        Pref.bangumiShowTags &&
+        controller.category.type == bangumiTypeAnime &&
+        !isTv;
     final showEpisodes =
         Pref.bangumiShowEpisodes &&
         controller.category == BangumiCategory.tvAnime;
@@ -269,12 +273,16 @@ class BangumiMonthView extends StatelessWidget {
                   horizontal: Style.safeSpace,
                 ),
                 sliver: SliverGrid.builder(
-                  gridDelegate: _gridDelegate(context),
+                  gridDelegate: _gridDelegate(
+                    context,
+                    textExtent: coverTags ? 46 : 60,
+                  ),
                   itemCount: items.length,
                   itemBuilder: (context, index) => BangumiCardV(
                     item: items[index],
                     showTags: showTags,
                     showEpisodes: showEpisodes,
+                    coverTags: coverTags,
                   ),
                 ),
               ),
@@ -401,12 +409,15 @@ class _GroupTitle extends StatelessWidget {
   }
 }
 
-SliverGridDelegateWithExtentAndRatio _gridDelegate(BuildContext context) =>
-    SliverGridDelegateWithExtentAndRatio(
-      mainAxisSpacing: Style.cardSpace,
-      crossAxisSpacing: Style.cardSpace,
-      maxCrossAxisExtent: Grid.smallCardWidth * 0.6,
-      childAspectRatio: 0.75,
-      // 标题固定两行（15.6 × 2）+ tag 行（16）+ 上下内边距（10），留 2dp 余量。
-      mainAxisExtent: MediaQuery.textScalerOf(context).scale(60),
-    );
+SliverGridDelegateWithExtentAndRatio _gridDelegate(
+  BuildContext context, {
+  double textExtent = 60,
+}) => SliverGridDelegateWithExtentAndRatio(
+  mainAxisSpacing: Style.cardSpace,
+  crossAxisSpacing: Style.cardSpace,
+  maxCrossAxisExtent: Grid.smallCardWidth * 0.6,
+  childAspectRatio: 0.75,
+  // TV 卡片 tag 贴在封面上，标题区只需容纳两行（46dp）；
+  // 其它分类标题下还有一行 tag（60dp）。
+  mainAxisExtent: MediaQuery.textScalerOf(context).scale(textExtent),
+);
