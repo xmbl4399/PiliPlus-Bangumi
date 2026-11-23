@@ -159,3 +159,6 @@ ohos/.codegenie
 .claude/skills/deveco-cli/SKILL.md
 ohos/.cache/.tsbuildinfo
 ohos/.cache/.tsbuildinfo.linter
+
+# 本地调试签名，不入库
+ohos/.sign/

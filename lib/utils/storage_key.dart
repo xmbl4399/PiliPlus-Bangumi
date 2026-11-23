@@ -275,7 +275,11 @@ abstract final class SettingBoxKey {
       liveCdnUrl = 'liveCdnUrl',
       saveReply = 'saveReply',
       appFont = 'appFont',
-      foldDepth = 'foldDepth';
+      foldDepth = 'foldDepth',
+      bangumiApiSource = 'bangumiApiSource',
+      bangumiHideNoScore = 'bangumiHideNoScore',
+      bangumiShowTags = 'bangumiShowTags',
+      bangumiShowEpisodes = 'bangumiShowEpisodes';
 }
 
 abstract final class LocalCacheKey {

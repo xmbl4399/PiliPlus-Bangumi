@@ -1207,4 +1207,19 @@ abstract final class Pref {
 
   static bool get autoWearMedal =>
       _setting.get(SettingBoxKey.autoWearMedal, defaultValue: false);
+
+  // ---------------- Bangumi（bgm.tv） ----------------
+
+  /// 首选接口地址；空串表示官方优先。
+  static String get bangumiApiBaseUrl =>
+      _setting.get(SettingBoxKey.bangumiApiSource, defaultValue: '');
+
+  static bool get bangumiHideNoScore =>
+      _setting.get(SettingBoxKey.bangumiHideNoScore, defaultValue: true);
+
+  static bool get bangumiShowTags =>
+      _setting.get(SettingBoxKey.bangumiShowTags, defaultValue: true);
+
+  static bool get bangumiShowEpisodes =>
+      _setting.get(SettingBoxKey.bangumiShowEpisodes, defaultValue: true);
 }

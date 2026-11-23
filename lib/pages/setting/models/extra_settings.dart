@@ -11,6 +11,8 @@ import 'package:PiliPlus/common/widgets/image_grid/image_grid_view.dart'
 import 'package:PiliPlus/http/fav.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/sponsor_block/skip_type.dart';
+import 'package:PiliPlus/models_new/bangumi/bangumi_category.dart';
+import 'package:PiliPlus/pages/bangumi/controller.dart';
 import 'package:PiliPlus/pages/common/slide/common_slide_page.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
 import 'package:PiliPlus/pages/setting/models/model.dart';
@@ -81,6 +83,37 @@ List<SettingsModel> get extraSettings => [
     onSelected: (value, setState) => GStorage.setting
         .put(SettingBoxKey.pgcSkipType, value.index)
         .whenComplete(setState),
+  ),
+  PopupModel<BangumiApiSource>(
+    title: 'BGM 接口源',
+    leading: const Icon(Icons.dns_outlined),
+    value: () => BangumiApiSource.fromBaseUrl(Pref.bangumiApiBaseUrl),
+    items: BangumiApiSource.values,
+    onSelected: (value, setState) => GStorage.setting
+        .put(SettingBoxKey.bangumiApiSource, value.baseUrl)
+        .whenComplete(setState),
+  ),
+  SwitchModel(
+    title: '隐藏无评分条目',
+    subtitle: '未出分的条目不在番剧页展示',
+    leading: const Icon(Icons.star_border),
+    setKey: SettingBoxKey.bangumiHideNoScore,
+    defaultVal: true,
+    onChanged: (_) => _refreshBangumi(),
+  ),
+  SwitchModel(
+    title: '番剧卡片显示题材标签',
+    leading: const Icon(Icons.label_outline),
+    setKey: SettingBoxKey.bangumiShowTags,
+    defaultVal: true,
+    onChanged: (_) => _refreshBangumi(),
+  ),
+  SwitchModel(
+    title: 'TV 番剧显示集数',
+    leading: const Icon(Icons.format_list_numbered),
+    setKey: SettingBoxKey.bangumiShowEpisodes,
+    defaultVal: true,
+    onChanged: (_) => _refreshBangumi(),
   ),
   const SwitchModel(
     title: '禁用 SSL 证书验证',
@@ -279,8 +312,16 @@ List<SettingsModel> get extraSettings => [
   ),
 ];
 
-void _showDownPathDialog(BuildContext context, VoidCallback setState) {
-  showDialog(
+/// Bangumi 设置变更后立刻刷新首页两个入口，避免用户再进一次页面。
+void _refreshBangumi() {
+  for (final tag in const ['bangumi', 'cinema']) {
+    try {
+      Get.find<BangumiController>(tag: tag).onRefresh();
+    } catch (_) {}
+  }
+}
+
+void _showDownPathDialog(BuildContext context, VoidCallback setState) {  showDialog(
     context: context,
     builder: (context) => SimpleDialog(
       clipBehavior: Clip.hardEdge,

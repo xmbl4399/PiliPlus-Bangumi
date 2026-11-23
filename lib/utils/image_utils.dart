@@ -199,7 +199,20 @@ abstract final class ImageUtils {
     r'\.(jpg|jpeg|png|webp|gif|avif)$',
     caseSensitive: false,
   );
+
+  /// Bangumi（bgm.tv 及其社区反代）的图片不支持 B 站 CDN 的 `@xxx.webp`
+  /// 缩略图后缀，必须原样返回，否则封面会 404。
+  static bool _isBangumiUrl(String src) {
+    final host = Uri.tryParse(src)?.host ?? '';
+    return host.endsWith('bgm.tv') ||
+        host.endsWith('retr0.xyz') ||
+        host.endsWith('anibt.net');
+  }
+
   static String safeThumbnailUrl(String? src) {
+    if (src != null && _isBangumiUrl(src)) {
+      return src.http2https;
+    }
     if (src != null && _suffixRegex.hasMatch(src)) {
       return thumbnailUrl(src);
     }
@@ -211,6 +224,9 @@ abstract final class ImageUtils {
     caseSensitive: false,
   );
   static String thumbnailUrl(String? src, [int maxQuality = 1]) {
+    if (src != null && _isBangumiUrl(src)) {
+      return src.http2https;
+    }
     if (src != null && maxQuality != 100) {
       maxQuality = math.max(maxQuality, GlobalData().imgQuality);
       bool hasMatch = false;
@@ -238,6 +254,9 @@ abstract final class ImageUtils {
     int? expectedHeight, [
     int maxQuality = 1,
   ]) {
+    if (src != null && _isBangumiUrl(src)) {
+      return src.http2https;
+    }
     if (src != null &&
         (expectedWidth != null ||
             expectedHeight != null ||
