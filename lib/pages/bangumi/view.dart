@@ -1,12 +1,12 @@
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/native_top_spacer.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/bangumi/bangumi_category.dart';
 import 'package:PiliPlus/models_new/bangumi/bangumi_item.dart';
 import 'package:PiliPlus/pages/bangumi/controller.dart';
+import 'package:PiliPlus/pages/bangumi/widgets/bangumi_card_skeleton.dart';
 import 'package:PiliPlus/pages/bangumi/widgets/bangumi_card_v.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -152,9 +152,7 @@ class BangumiCalendarView extends StatelessWidget {
         () => switch (controller.state.value) {
           Loading() => CustomScrollView(
             controller: controller.scrollController,
-            slivers: const [
-              SliverFillRemaining(hasScrollBody: false, child: m3eLoading),
-            ],
+            slivers: [_skeletonSliver(context, textExtent: 46, count: 6)],
           ),
           Error(:final errMsg) => CustomScrollView(
             controller: controller.scrollController,
@@ -244,16 +242,14 @@ class BangumiMonthView extends StatelessWidget {
 
         final slivers = <Widget>[
           SliverToBoxAdapter(child: _YearBar(controller: controller)),
-          if (loading)
-            const SliverToBoxAdapter(
-              child: LinearProgressIndicator(minHeight: 2),
-            ),
         ];
 
-        if (loading && groups.isEmpty) {
+        if (groups.isEmpty && controller.hasMore.value) {
           slivers.add(
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 240, child: m3eLoading),
+            _skeletonSliver(
+              context,
+              textExtent: coverTags ? 46 : 60,
+              count: 6,
             ),
           );
         }
@@ -289,45 +285,67 @@ class BangumiMonthView extends StatelessWidget {
             );
         }
 
-        if (!loading) {
-          if (groups.isEmpty && failed == 0) {
-            slivers.add(
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 60),
-                  child: Center(child: Text('这个分类暂无条目')),
+        if (loading && groups.isNotEmpty) {
+          slivers.add(
+            _skeletonSliver(
+              context,
+              textExtent: coverTags ? 46 : 60,
+              count: 2,
+            ),
+          );
+        }
+
+        if (failed > 0) {
+          slivers.add(
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
                 ),
-              ),
-            );
-          } else if (failed > 0) {
-            slivers.add(
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '$failed 个月份加载失败',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).colorScheme.outline,
-                          ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '$failed 个月份加载失败',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.outline,
                         ),
                       ),
-                      TextButton(
-                        onPressed: controller.onRefresh,
-                        child: const Text('重试'),
-                      ),
-                    ],
+                    ),
+                    TextButton(
+                      onPressed: controller.onRefresh,
+                      child: const Text('重试'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        } else if (groups.isEmpty && !loading && !controller.hasMore.value) {
+          slivers.add(
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 60),
+                child: Center(child: Text('这个分类暂无条目')),
+              ),
+            ),
+          );
+        } else if (!loading && controller.hasMore.value && groups.isNotEmpty) {
+          slivers.add(
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Center(
+                  child: TextButton(
+                    onPressed: controller.loadMore,
+                    child: const Text('加载更多'),
                   ),
                 ),
               ),
-            );
-          }
+            ),
+          );
         }
 
         slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 100)));
@@ -408,6 +426,24 @@ class _GroupTitle extends StatelessWidget {
     );
   }
 }
+
+Widget _skeletonSliver(
+  BuildContext context, {
+  required double textExtent,
+  int count = 6,
+}) => SliverPadding(
+  padding: const EdgeInsets.fromLTRB(
+    Style.safeSpace,
+    12,
+    Style.safeSpace,
+    0,
+  ),
+  sliver: SliverGrid.builder(
+    gridDelegate: _gridDelegate(context, textExtent: textExtent),
+    itemCount: count,
+    itemBuilder: (context, _) => const BangumiCardSkeleton(),
+  ),
+);
 
 SliverGridDelegateWithExtentAndRatio _gridDelegate(
   BuildContext context, {

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/bangumi/bangumi_category.dart';
@@ -7,7 +5,8 @@ import 'package:PiliPlus/models_new/bangumi/bangumi_item.dart';
 import 'package:PiliPlus/pages/common/common_controller.dart';
 import 'package:PiliPlus/services/bangumi_repository.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:flutter/widgets.dart' show GlobalKey, ScrollController;
+import 'package:flutter/widgets.dart'
+    show GlobalKey, ScrollController, WidgetsBinding;
 import 'package:get/get.dart';
 
 /// 顶栏一级入口对应的数据范围。
@@ -120,8 +119,18 @@ class BangumiMonthController extends BangumiSubController {
   final RxBool loading = false.obs;
   final RxInt failedMonths = 0.obs;
 
-  /// 已完成（成功或失败）的月份数，用于进度提示。
-  final RxInt settledMonths = 0.obs;
+  final RxBool hasMore = true.obs;
+
+  /// 首屏预取的月份数。
+  static const int prefetchCount = 2;
+
+  /// 距底部多少像素开始预取下一月。
+  static const double prefetchDistance = 800;
+
+  /// 待加载月份队列（按展示顺序）。
+  final List<int> _pending = [];
+  int _emptyStreak = 0;
+  int _autoFillCount = 0;
 
   /// 月份 -> 条目；只放已成功返回的月份。
   final groups = <int, List<BangumiItem>>{}.obs;
@@ -132,56 +141,102 @@ class BangumiMonthController extends BangumiSubController {
 
   static const int monthCount = 12;
 
-  StreamSubscription<BangumiMonthResult>? _subscription;
   int _generation = 0;
 
   @override
   void onInit() {
     super.onInit();
+    scrollController.addListener(_onScroll);
     load();
   }
 
+  void _onScroll() {
+    if (loading.value || !hasMore.value) return;
+    if (!scrollController.hasClients) return;
+    if (scrollController.position.extentAfter < prefetchDistance) {
+      loadMore();
+    }
+  }
+
   /// 加载指定年份；不传则重载当前年份。
-  Future<void> load([int? targetYear]) {
+  Future<void> load([int? targetYear]) async {
     final target = targetYear ?? year.value;
     year.value = target;
-
-    final generation = ++_generation;
-    _subscription?.cancel();
+    _generation++;
+    _pending
+      ..clear()
+      ..addAll(_monthOrder(target));
     groups.clear();
     failedMonths.value = 0;
-    settledMonths.value = 0;
-    loading.value = true;
+    hasMore.value = true;
+    _emptyStreak = 0;
+    _autoFillCount = 0;
+    if (scrollController.hasClients && scrollController.offset > 0) {
+      scrollController.jumpTo(0);
+    }
+    // 首屏只预取最近 2 个月，其余滚到底部再拉。
+    for (var i = 0; i < prefetchCount && _pending.isNotEmpty; i++) {
+      await _loadNext();
+    }
+    _scheduleAutoFill();
+  }
 
-    final completer = Completer<void>();
-    _subscription = BangumiRepository.loadYear(
+  /// 滚动阈值触发的加载下一页。
+  Future<void> loadMore() async {
+    if (loading.value || !hasMore.value) return;
+    await _loadNext();
+    _scheduleAutoFill();
+  }
+
+  Future<void> _loadNext() async {
+    if (_pending.isEmpty) {
+      hasMore.value = false;
+      return;
+    }
+    final generation = _generation;
+    final month = _pending.removeAt(0);
+    loading.value = true;
+    final res = await BangumiRepository.browseYearMonth(
       category: category,
-      year: target,
-      months: _monthOrder(target),
+      year: year.value,
+      month: month,
       hideNoScore: Pref.bangumiHideNoScore,
-    ).listen(
-      (result) {
-        if (generation != _generation) return;
-        settledMonths.value++;
-        if (result.isSuccess) {
-          groups[result.month] = result.items;
-        } else {
-          failedMonths.value++;
-        }
-      },
-      onError: (Object _) {
-        if (generation != _generation) return;
-        loading.value = false;
-        if (!completer.isCompleted) completer.complete();
-      },
-      onDone: () {
-        if (generation != _generation) return;
-        loading.value = false;
-        if (!completer.isCompleted) completer.complete();
-      },
-      cancelOnError: false,
     );
-    return completer.future;
+    if (isClosed || generation != _generation) return;
+    loading.value = false;
+    switch (res) {
+      case Success(:final response):
+        if (response.isEmpty) {
+          _emptyStreak++;
+        } else {
+          _emptyStreak = 0;
+          groups[month] = response;
+        }
+      case Error():
+        _emptyStreak = 0;
+        failedMonths.value++;
+      case Loading():
+        break;
+    }
+    if (_pending.isEmpty) {
+      hasMore.value = false;
+    } else if (_emptyStreak > 0 && _emptyStreak <= 2) {
+      // 空月份最多连续跳过 2 个，避免滚到底看到一片空白。
+      await _loadNext();
+    }
+  }
+
+  /// 内容不足一屏时自动补数据（最多 3 次），避免无法滚动。
+  void _scheduleAutoFill() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isClosed || loading.value || !hasMore.value) return;
+      if (_autoFillCount >= 3) return;
+      if (!scrollController.hasClients) return;
+      if (scrollController.position.maxScrollExtent < 240) {
+        _autoFillCount++;
+        loadMore();
+      }
+    });
   }
 
   /// 当前年份优先加载「当季 → 未来 → 过去」，其余年份固定 12 → 1。
@@ -201,7 +256,8 @@ class BangumiMonthController extends BangumiSubController {
 
   @override
   void onClose() {
-    _subscription?.cancel();
+    _generation++;
+    scrollController.removeListener(_onScroll);
     super.onClose();
   }
 }
