@@ -17,6 +17,7 @@ import 'package:PiliPlus/pages/common/slide/common_slide_page.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
 import 'package:PiliPlus/pages/setting/models/model.dart';
 import 'package:PiliPlus/pages/setting/widgets/slider_dialog.dart';
+import 'package:PiliPlus/services/bangumi_cache.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
@@ -114,6 +115,16 @@ List<SettingsModel> get extraSettings => [
     setKey: SettingBoxKey.bangumiShowEpisodes,
     defaultVal: true,
     onChanged: (_) => _refreshBangumi(),
+  ),
+  NormalModel(
+    title: '清理番剧缓存',
+    subtitle: '删除 Bangumi 番剧页已缓存的月份与新番表',
+    leading: const Icon(Icons.delete_sweep_outlined),
+    onTap: (context, setState) {
+      BangumiCache.clear();
+      _refreshBangumi();
+      SmartDialog.showToast('已清理番剧缓存');
+    },
   ),
   const SwitchModel(
     title: '禁用 SSL 证书验证',

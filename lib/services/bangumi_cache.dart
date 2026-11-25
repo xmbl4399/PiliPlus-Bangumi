@@ -1,15 +1,26 @@
 import 'package:PiliPlus/models_new/bangumi/bangumi_item.dart';
 import 'package:PiliPlus/utils/storage.dart';
 
-/// Bangumi 月列表缓存。
+/// Bangumi 列表缓存。
 ///
-/// 键为「大类 + 子分类 + 年 + 月」；当季 / 未来月份 6 小时，历史月份 30 天。
+/// 两类数据：
+/// - 月份列表：键为「大类 + 子分类 + 年 + 月」，当季 / 未来月份 6 小时，
+///   历史月份 30 天；**空结果只缓存 30 分钟**，避免刚开播的新番被长期钉住。
+/// - 新番表（`/calendar`）：整份周历缓存 60 分钟，对齐接口的 `max-age`。
+///
 /// 「隐藏无评分」「韩剧过滤」不参与缓存键，过滤在调用方做。
-///
-/// 内存命中最快；未命中时回落到 Hive（`GStorage.localCache`），
-/// 因此冷启动也能秒开已看过的月份。
+/// 内存命中最快；未命中时回落到 Hive（`GStorage.localCache`）。
 abstract final class BangumiCache {
+  static const String _calendarKey = 'bangumi.calendar';
+
+  /// 空月份结果的短缓存时间。
+  static const Duration emptyTtl = Duration(minutes: 30);
+
+  /// 新番表缓存时间。
+  static const Duration calendarTtl = Duration(minutes: 60);
+
   static final Map<String, _CacheEntry> _memory = {};
+  static _CalendarEntry? _calendarMemory;
 
   static String _key({
     required int type,
@@ -43,7 +54,9 @@ abstract final class BangumiCache {
     if (disk != null) {
       _memory[key] = _CacheEntry(
         items: disk,
-        expireAt: DateTime.now().add(ttl(year: year, month: month)),
+        expireAt: DateTime.now().add(
+          disk.isEmpty ? emptyTtl : ttl(year: year, month: month),
+        ),
       );
     }
     return disk;
@@ -57,9 +70,71 @@ abstract final class BangumiCache {
     required List<BangumiItem> items,
   }) {
     final key = _key(type: type, cat: cat, year: year, month: month);
-    final expireAt = DateTime.now().add(ttl(year: year, month: month));
+    final expireAt = DateTime.now().add(
+      items.isEmpty ? emptyTtl : ttl(year: year, month: month),
+    );
     _memory[key] = _CacheEntry(items: items, expireAt: expireAt);
     _writeDisk(key, items, expireAt);
+  }
+
+  /// 读取新番表：返回「星期 id -> 条目」；未缓存或过期返回 null。
+  static Map<int, List<BangumiItem>>? getCalendar() {
+    final memory = _calendarMemory;
+    if (memory != null) {
+      if (memory.expireAt.isBefore(DateTime.now())) {
+        _calendarMemory = null;
+      } else {
+        return memory.days;
+      }
+    }
+    try {
+      final data = GStorage.localCache.get(_calendarKey);
+      if (data is! Map) return null;
+      final expireAt = data['expireAt'] as int? ?? 0;
+      if (DateTime.now().millisecondsSinceEpoch >= expireAt) return null;
+      final days = <int, List<BangumiItem>>{};
+      final rawDays = data['days'];
+      if (rawDays is List) {
+        for (final day in rawDays) {
+          if (day is! Map) continue;
+          final weekday = day['weekday'] as int? ?? 0;
+          if (weekday <= 0) continue;
+          days[weekday] =
+              (day['items'] as List?)
+                  ?.whereType<Map>()
+                  .map((e) => BangumiItem.fromJson(e.cast<String, dynamic>()))
+                  .toList() ??
+              const [];
+        }
+      }
+      _calendarMemory = _CalendarEntry(
+        days: days,
+        expireAt: DateTime.fromMillisecondsSinceEpoch(expireAt),
+      );
+      return days;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 写入新番表（未做「隐藏无评分」过滤的原始分组）。
+  static void putCalendar(Map<int, List<BangumiItem>> days) {
+    final expireAt = DateTime.now().add(calendarTtl);
+    _calendarMemory = _CalendarEntry(days: days, expireAt: expireAt);
+    try {
+      GStorage.localCache.put(_calendarKey, {
+        'expireAt': expireAt.millisecondsSinceEpoch,
+        'days': [
+          for (final entry in days.entries)
+            {
+              'weekday': entry.key,
+              'items': [for (final item in entry.value) item.toJson()],
+            },
+        ],
+      });
+    } catch (_) {
+      // 缓存写失败不影响主流程
+    }
   }
 
   static List<BangumiItem>? _readDisk(String key) {
@@ -95,6 +170,7 @@ abstract final class BangumiCache {
 
   static void clear() {
     _memory.clear();
+    _calendarMemory = null;
     try {
       for (final key in GStorage.localCache.keys.toList()) {
         if (key is String && key.startsWith('bangumi.')) {
@@ -109,5 +185,12 @@ class _CacheEntry {
   const _CacheEntry({required this.items, required this.expireAt});
 
   final List<BangumiItem> items;
+  final DateTime expireAt;
+}
+
+class _CalendarEntry {
+  const _CalendarEntry({required this.days, required this.expireAt});
+
+  final Map<int, List<BangumiItem>> days;
   final DateTime expireAt;
 }

@@ -41,14 +41,18 @@ abstract final class BangumiRepository {
     bool hideNoScore = false,
   }) async {
     try {
-      final days = await BangumiHttp.getCalendar();
-      final byWeekday = <int, List<BangumiItem>>{
-        for (final day in days)
-          day.weekday.id: [
-            for (final subject in day.items)
-              if (subject.id > 0) _normalizeCalendar(subject),
-          ],
-      };
+      var byWeekday = BangumiCache.getCalendar();
+      if (byWeekday == null) {
+        final days = await BangumiHttp.getCalendar();
+        byWeekday = <int, List<BangumiItem>>{
+          for (final day in days)
+            day.weekday.id: [
+              for (final subject in day.items)
+                if (subject.id > 0) _normalizeCalendar(subject),
+            ],
+        };
+        BangumiCache.putCalendar(byWeekday);
+      }
       final target = today ?? BangumiWeekday.today;
       final groups = [
         for (final weekday in BangumiWeekday.orderFrom(target))
